@@ -1,0 +1,998 @@
+{
+  "name": "Moscow Free Activities Telegram Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        400
+      ],
+      "id": "28a2d648-0bb8-43a4-b20e-f7bfb878ab7e"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": " Places template",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1144721981,
+          "mode": "list",
+          "cachedResultName": "users",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit#gid=1144721981"
+        },
+        "options": {}
+      },
+      "name": "Get Users",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        400
+      ],
+      "alwaysOutputData": true,
+      "id": "7db06406-89c4-4b47-b9ca-0759ce96d981"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": " Places template",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 172009911,
+          "mode": "list",
+          "cachedResultName": "Проверенный каталог",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit#gid=172009911"
+        },
+        "options": {}
+      },
+      "name": "Get Places",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        400
+      ],
+      "executeOnce": true,
+      "id": "e31f256f-43b1-4938-8664-25371e5779cd"
+    },
+    {
+      "parameters": {
+        "jsCode": "const upd = $('Telegram Trigger').first().json;\nconst cb = upd.callback_query;\nconst msg = cb ? cb.message : upd.message;\nconst chatId = String(msg.chat.id);\nconst raw = cb ? String(cb.data || '') : String(msg.text || '').trim();\nconst low = raw.toLowerCase();\nconst norm = s => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/метро/g, '').trim();\nconst esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst allUsers = $('Get Users').all().map(i => i.json).filter(u => u.chat_id !== undefined && String(u.chat_id).trim() !== '');\n// если в таблице дубли одного chat_id, берём самую нижнюю (последнюю) строку\nconst users = [...new Map(allUsers.map(u => [String(u.chat_id).trim(), u])).values()];\nconst places = $input.all().map(i => i.json).filter(p => p.name);\nconst me = users.find(u => String(u.chat_id).trim() === chatId);\nconst state = me ? String(me.state || 'done') : '';\n\nconst base = () => ({\n  chat_id: chatId,\n  name: me ? (me.name || '') : '',\n  age: me ? (me.age || '') : '',\n  metro: me ? (me.metro || '') : '',\n  state: me ? (me.state || 'done') : '',\n  points: me ? (me.points || 0) : 0,\n  hobbies: me ? (me.hobbies || '') : ''\n});\nconst reply = (type, text, saveData) => [{ json: { chat_id: chatId, reply_type: type, reply_text: text, save: !!saveData, saveData: saveData || {} } }];\n\nconst Q = {\n  ask_name: 'Как тебя зовут?',\n  ask_age: 'Сколько тебе лет? Напиши цифрой.',\n  ask_metro: 'Какая станция метро рядом с тобой? Я буду предлагать места поблизости.'\n};\n\n// ---- Знакомство ----\nif (!me) {\n  return reply('plain', 'Привет! Я Task Bot 👋\\nПомогаю находить бесплатные и недорогие места в Москве.\\n\\nДавай познакомимся! ' + Q.ask_name, { ...base(), state: 'ask_name' });\n}\nif (Q[state]) {\n  const isText = !cb && raw !== '' && !raw.startsWith('/');\n  if (!isText) return reply('plain', Q[state]);\n  if (state === 'ask_name') {\n    if (raw.length > 40) return reply('plain', 'Имя слишком длинное. Напиши, пожалуйста, короче.');\n    return reply('plain', 'Приятно познакомиться, ' + raw + '! ' + Q.ask_age, { ...base(), name: raw, state: 'ask_age' });\n  }\n  if (state === 'ask_age') {\n    const age = parseInt(raw, 10);\n    if (!/^\\d{1,3}$/.test(raw) || age < 10 || age > 100) return reply('plain', 'Напиши возраст цифрами, например: 21');\n    return reply('plain', Q.ask_metro, { ...base(), age: String(age), state: 'ask_metro' });\n  }\n  if (raw.length > 40) return reply('plain', 'Название слишком длинное. Напиши только станцию метро.');\n  return reply('main_menu', 'Готово! Теперь я буду предлагать места рядом со станцией «' + raw + '».\\n\\nГлавное меню. Выбери, что хочешь сделать:', { ...base(), metro: raw, state: 'done' });\n}\n\n// ---- Меню и разделы ----\nconst greetings = ['hello', 'hi', 'привет', 'здравствуй', 'здравствуйте', 'хай', 'start'];\nif (raw === '' || low.startsWith('/start') || low.startsWith('/menu') || raw === 'menu') {\n  return reply('main_menu', 'Главное меню. Выбери, что хочешь сделать:');\n}\nif (greetings.includes(low)) {\n  return reply('main_menu', 'Привет! Выбери, что хочешь сделать:');\n}\nif (raw === 'profile') {\n  return reply('profile', '👤 Мой профиль\\n\\nИмя: ' + (me.name || '—') + '\\nВозраст: ' + (me.age || '—') + '\\nМетро: ' + (me.metro || '—') + '\\nБаллы: ' + (me.points || 0));\n}\nif (raw === 'edit') {\n  return reply('plain', 'Давай обновим анкету. ' + Q.ask_name, { ...base(), state: 'ask_name' });\n}\nif (raw === 'rating') {\n  const top = users.map(u => ({ name: u.name || 'Без имени', points: Number(u.points) || 0 }))\n    .filter(u => u.points > 0).sort((a, b) => b.points - a.points).slice(0, 10);\n  if (!top.length) return reply('back', '🏆 Рейтинг пока пуст. Скоро здесь появятся лучшие участники!');\n  return reply('back', '🏆 Топ участников:\\n\\n' + top.map((u, i) => (i + 1) + '. ' + u.name + ' — ' + u.points).join('\\n'));\n}\nif (raw === 'walks') {\n  return reply('walks', '🚶 Прогулки. Выбери категорию, найди места рядом со своим метро или просто напиши, что ищешь:');\n}\n\n// ---- Подборки мест ----\nconst myMetro = norm(me.metro);\nconst isNear = p => {\n  const m = norm(p.metro);\n  return myMetro.length >= 3 && m.length >= 3 && (m === myMetro || m.includes(myMetro) || myMetro.includes(m));\n};\nconst nearFirst = (a, b) => (isNear(a) ? 0 : 1) - (isNear(b) ? 0 : 1);\nconst noResult = 'Ничего не нашёл 🤔 Попробуй другие слова (например: «парк», «метро Китай-город», «фото») или выбери категорию:';\n\nlet found = [];\nlet header = '';\nconst q = norm(raw);\nconst freeRequested = /бесплат/.test(q);\nconst freeOnly = arr => freeRequested ? arr.filter(p => /бесплат/.test(norm(p.budget))) : arr;\nconst intentCategory = text => {\n  if (/зоопарк|зоосад|животн/.test(text)) return 'зоопарк';\n  if (/панорам|смотров|видов/.test(text)) return 'панорама';\n  if (/музе|музей|музеи|экспозиц/.test(text)) return 'музей';\n  if (/искусств|галере|выставк/.test(text)) return 'искусство';\n  if (/парк|парки|сквер|саду|сады/.test(text)) return 'парк';\n  if (/прогул|погуля|гулять|маршрут|набереж/.test(text)) return 'прогулка';\n  return '';\n};\nconst categoryMatches = (p, cat) => norm(p.category) === cat;\nconst metroQuery = q.match(/(?:метро|станци[яией]|м\\.)\\s+([а-яa-zё\\- ]{3,50})/i);\nconst metroTerm = metroQuery ? norm(metroQuery[1]).replace(/[?!.]+$/, '').trim() : '';\n\nif (raw === 'near') {\n  found = places.filter(isNear);\n  header = '📍 Места рядом с метро «' + (me.metro || '—') + '»:';\n  if (!found.length) return reply('walks', 'Рядом с твоим метро пока нет подтверждённых мест. Выбери категорию или попробуй другой запрос:');\n} else if (raw === 'random' || low.startsWith('/places')) {\n  if (places.length) found = [places[Math.floor(Math.random() * places.length)]];\n  header = '🎲 Случайное место для тебя:';\n} else if (raw.startsWith('cat:')) {\n  const c = intentCategory(norm(raw.slice(4))) || norm(raw.slice(4));\n  found = places.filter(p => categoryMatches(p, c)).sort(nearFirst);\n  header = 'Категория «' + raw.slice(4) + '»:';\n  if (!found.length) return reply('walks', 'В категории «' + raw.slice(4) + '» пока нет подтверждённых мест. Выбери другую категорию:');\n} else {\n  const cat = intentCategory(q);\n  let pool = freeOnly(places);\n  if (cat) pool = pool.filter(p => categoryMatches(p, cat));\n  if (metroTerm) pool = pool.filter(p => norm(p.metro).includes(metroTerm) || metroTerm.includes(norm(p.metro)) && norm(p.metro).length >= 3);\n  if (cat || freeRequested || metroTerm) {\n    found = pool.sort(nearFirst);\n  } else {\n    const stop = new Set(['где','что','как','для','или','есть','мне','хочу','можно','место','места','куда','сходить','недалеко','рядом','покажи','найди','подскажи','посоветуй','какие','есть','москве','москва']);\n    const words = q.split(/[^а-яa-z0-9]+/).filter(w => w.length >= 3 && !stop.has(w));\n    found = words.length ? pool.map(p => {\n      const hay = norm([p.name, p.address, p.metro, p.category, p.best_for, p.description].join(' '));\n      const score = words.reduce((sum,w) => sum + Number(hay.includes(w.slice(0, Math.min(5,w.length)))),0);\n      return {p,score};\n    }).filter(x=>x.score>0).sort((a,b)=>(b.score-a.score)||nearFirst(a.p,b.p)).map(x=>x.p) : [];\n  }\n  header = 'Вот что нашёл по запросу «' + raw + '»:';\n  if (!found.length) {\n    const detail = freeRequested ? ' бесплатных' : cat ? ' категории «' + cat + '»' : '';\n    return reply('walks', 'По запросу «' + raw + '» нет подтверждённых' + detail + ' мест в каталоге. Попробуй другой запрос или выбери категорию:');\n  }\n}\nif (!found.length) return reply('walks', 'В проверенном каталоге пока нет доступных мест.');\n\nreturn found.slice(0, 5).map((p, i) => {\n  let cap = (i === 0 ? esc(header) + '\\n\\n' : '') + '<b>' + esc(p.name) + '</b>\\n📍 ' + esc(p.address);\n  if (p.metro) cap += '\\n🚇 ' + esc(p.metro) + (isNear(p) ? ' (рядом с тобой)' : '');\n  if (p.inrun_date_line) cap += '\\n' + esc(p.inrun_date_line);\n  if (p.budget) cap += '\\n💰 ' + esc(p.budget);\n  if (p.opening_hours) cap += '\\n🕒 ' + esc(p.opening_hours);\n  if (p.description) cap += '\\n\\n' + esc(String(p.description).slice(0, 600));\n  const photo = String(p.photo_url || '').trim();\n  if (photo && p.photo_credit) cap += '\\n\\n📷 ' + esc(p.photo_credit);\n  const map = String(p.map_url || '').trim() || ('https://yandex.ru/maps/?text=' + encodeURIComponent(p.name + ', Москва'));\n  return { json: { chat_id: chatId, reply_type: 'cards', save: false, saveData: {}, caption: cap, photo_url: photo, hasPhoto: /^https?:\\/\\//i.test(photo), map_url: map } };\n});"
+      },
+      "name": "Route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        400
+      ],
+      "id": "5a72d99b-8fca-46d1-88ba-949a3a75e39d"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.save }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Save?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        400
+      ],
+      "id": "c9417e74-b79a-4cff-8b2b-d762d484c876"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": " Places template",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1144721981,
+          "mode": "list",
+          "cachedResultName": "users",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit#gid=1144721981"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "name": "={{ $json.saveData.name }}",
+            "age": "={{ $json.saveData.age }}",
+            "metro": "={{ $json.saveData.metro }}",
+            "state": "={{ $json.saveData.state }}",
+            "points": "={{ $json.saveData.points }}",
+            "hobbies": "={{ $json.saveData.hobbies }}"
+          },
+          "matchingColumns": [
+            "chat_id"
+          ],
+          "schema": [
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "age",
+              "displayName": "age",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "metro",
+              "displayName": "metro",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "points",
+              "displayName": "points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hobbies",
+              "displayName": "hobbies",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "name": "Save User",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1328,
+        272
+      ],
+      "id": "af9cd5a5-a9c0-471c-a601-69d17258c623"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "s0",
+                    "leftValue": "={{ $json.reply_type }}",
+                    "rightValue": "plain",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "plain"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "s1",
+                    "leftValue": "={{ $json.reply_type }}",
+                    "rightValue": "main_menu",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "main_menu"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "s2",
+                    "leftValue": "={{ $json.reply_type }}",
+                    "rightValue": "profile",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "profile"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "s3",
+                    "leftValue": "={{ $json.reply_type }}",
+                    "rightValue": "walks",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "walks"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "s4",
+                    "leftValue": "={{ $json.reply_type }}",
+                    "rightValue": "back",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "back"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "s5",
+                    "leftValue": "={{ $json.reply_type }}",
+                    "rightValue": "cards",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "cards"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Reply Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1552,
+        400
+      ],
+      "id": "dfd413ae-a629-4cd5-af3b-1700602fc721"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Route').first().json.chat_id }}",
+        "text": "={{ $('Route').first().json.reply_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send Plain",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1824,
+        0
+      ],
+      "id": "a88042c4-fcc8-4c12-9170-13afb8125b25"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Route').first().json.chat_id }}",
+        "text": "={{ $('Route').first().json.reply_text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "👤 Мой профиль",
+                    "additionalFields": {
+                      "callback_data": "profile"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🏆 Рейтинг",
+                    "additionalFields": {
+                      "callback_data": "rating"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🚶 Прогулки",
+                    "additionalFields": {
+                      "callback_data": "walks"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send Main Menu",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1824,
+        160
+      ],
+      "id": "8ba5a584-be25-4a3f-b999-17f34cb91be5"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Route').first().json.chat_id }}",
+        "text": "={{ $('Route').first().json.reply_text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✏️ Редактировать анкету",
+                    "additionalFields": {
+                      "callback_data": "edit"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ В меню",
+                    "additionalFields": {
+                      "callback_data": "menu"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send Profile",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1824,
+        320
+      ],
+      "id": "a63efe73-b4e9-42a4-bf3c-2c7f32603dfe"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Route').first().json.chat_id }}",
+        "text": "={{ $('Route').first().json.reply_text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🚶 Прогулка",
+                    "additionalFields": {
+                      "callback_data": "cat:прогулка"
+                    }
+                  },
+                  {
+                    "text": "🌳 Парк",
+                    "additionalFields": {
+                      "callback_data": "cat:парк"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🎨 Искусство",
+                    "additionalFields": {
+                      "callback_data": "cat:искусство"
+                    }
+                  },
+                  {
+                    "text": "🏛 Музеи",
+                    "additionalFields": {
+                      "callback_data": "cat:музей"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🌇 Панорама",
+                    "additionalFields": {
+                      "callback_data": "cat:панорама"
+                    }
+                  },
+                  {
+                    "text": "🦁 Зоопарк",
+                    "additionalFields": {
+                      "callback_data": "cat:зоопарк"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Рядом со мной",
+                    "additionalFields": {
+                      "callback_data": "near"
+                    }
+                  },
+                  {
+                    "text": "🎲 Случайное",
+                    "additionalFields": {
+                      "callback_data": "random"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ В меню",
+                    "additionalFields": {
+                      "callback_data": "menu"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send Walks",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1824,
+        480
+      ],
+      "id": "91ac3097-69ef-408e-be94-5a3f539ac25c"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Route').first().json.chat_id }}",
+        "text": "={{ $('Route').first().json.reply_text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ В меню",
+                    "additionalFields": {
+                      "callback_data": "menu"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send Back",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1824,
+        640
+      ],
+      "id": "14d3a1bf-636a-4a09-a542-b35480429642"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.hasPhoto }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Has Photo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        832
+      ],
+      "id": "1ce6e7fb-50b0-4d2b-a022-617be82bb516"
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "={{ $('Has Photo?').first().json.chat_id }}",
+        "binaryData": true,
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🗺 На карте",
+                    "additionalFields": {
+                      "url": "={{ $json.map_url }}"
+                    }
+                  },
+                  {
+                    "text": "⬅️ В меню",
+                    "additionalFields": {
+                      "callback_data": "menu"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "caption": "={{ $('Has Photo?').first().json.caption }}",
+          "parse_mode": "HTML"
+        }
+      },
+      "name": "Send Photo Card",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2336,
+        656
+      ],
+      "id": "73567cec-7238-4f26-b8c7-0deb8169f6f8",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id || $('Telegram Trigger').first().json.message?.chat?.id || $('Telegram Trigger').first().json.callback_query?.message?.chat?.id }}",
+        "text": "={{ $json.caption || \"Информация о месте временно недоступна.\" }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "name": "Send Text Card",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2144,
+        896
+      ],
+      "id": "59259ec7-1355-495b-9b02-047cfd88005f"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Places: данные из листа «Проверенный каталог» -> поля бота\n// (даты: логика из n8n_code_event_dates.js команды Inrun)\n// ===== НАСТРОЙКИ =====\n// Правило команды Inrun: показываем только строки, где inrun_publication разрешает публикацию\n// (значение содержит «публик», но не «не публик» / «архив» / «не дублировать»).\n// Сейчас в листе нет ни одной такой строки (значения вида «После геокодирования»), поэтому бот будет пустым.\nconst PUBLISH_VALUES = ['публик'];\nconst BLOCK_VALUES = ['не публик', 'архив', 'не дублир'];\nconst ALLOW_ROWS_WITHOUT_STATUS = false;\n\n// ТОЛЬКО ДЛЯ ПРИВАТНОГО ТЕСТА: true показывает строки со статусом verification_status = «Подтверждено»,\n// даже если inrun_publication ещё не разрешает публикацию. Перед пилотом вернуть false.\nconst TEST_MODE = true;\n\n// Колонки листа «Проверенный каталог»: берётся первая непустая из списка\nconst COLS = {\n  name: ['name_verified', 'name'],\n  address: ['address_verified', 'address'],\n  metro: ['metro_verified', 'metro'],\n  budget: ['price_verified', 'budget'],\n  type: ['type'],\n  description: ['description_verified', 'description'],\n  photo_url: ['photo_url'],\n  photo_credit: ['photo_credit_license'],\n  map_url: ['map_url'],\n  hours: ['opening_hours'],\n  date: ['date_or_period', 'event_dates', 'dates'],\n};\n\n\nfunction toCategory(type, name) {\n  const t = norm(type);\n  const n = norm(name);\n\n  if (t.includes('зоопарк') || n.includes('зоопарк')) {\n    return 'зоопарк';\n  }\n\n  if (n.includes('панорам') || t.includes('панорам')) {\n    return 'панорама';\n  }\n\n  if (t.includes('парк') || n.includes('парк')) {\n    return 'парк';\n  }\n\n  if (\n    t.includes('прогул') ||\n    t.includes('маршрут') ||\n    t.includes('набереж') ||\n    t.includes('бульвар')\n  ) {\n    return 'прогулка';\n  }\n\n  if (\n    t.includes('музей') ||\n    t.includes('экспозиц') ||\n    t.includes('усадьб') ||\n    t.includes('экскурс') ||\n    t.includes('здани')\n  ) {\n    return 'музей';\n  }\n\n  if (t.includes('выставк')) {\n    return 'искусство';\n  }\n\n  return '';\n}\n\n\nconst pick = (row, keys) => { for (const k of keys) { const v = row[k]; if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim(); } return ''; };\nconst norm = s => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\\s+/g, ' ').trim();\n\nfunction isDatePeriod(value) {\n  const s = String(value || '').trim();\n  return /^(?:постоянно\\.?|с\\s+\\d{1,2}\\s+|до\\s+\\d{1,2}\\s+|\\d{1,2}(?:\\s+и\\s+\\d{1,2})?\\s+[а-яё]+|\\d{1,2}[.\\/]\\d{1,2}[.\\/]\\d{2,4})/iu.test(s);\n}\nfunction splitTitleAndDate(value) {\n  const name = String(value || '').trim();\n  const match = /\\s*\\(([^()]*)\\)\\s*$/u.exec(name);\n  if (match && isDatePeriod(match[1])) return { title: name.slice(0, match.index).trim(), period: match[1].trim().replace(/[.\\s]+$/u, '') };\n  return { title: name, period: '' };\n}\nfunction formatDate(value) {\n  const period = String(value || '').trim();\n  if (!period || /^(?:не\\s+подтверждено|неизвестно|нет)$/iu.test(period)) return '';\n  if (/^постоянно$/iu.test(period)) return 'Постоянная экспозиция';\n  return period.replace(/\\s+/gu, ' ').replace(/[.\\s]+$/u, '');\n}\nfunction isPublishable(row) {\n  const s = norm(row.inrun_publication);\n  if (BLOCK_VALUES.some(b => s.includes(b))) return false;\n  if (PUBLISH_VALUES.some(p => s.includes(p))) return true;\n  if (TEST_MODE && norm(row.verification_status) === 'подтверждено') return true;\n  if (!Object.prototype.hasOwnProperty.call(row, 'inrun_publication') || !s) return ALLOW_ROWS_WITHOUT_STATUS;\n  return false;\n}\n\nconst out = [];\nfor (const item of $input.all()) {\n  const row = item.json || {};\n  if (!isPublishable(row)) continue;\n  const parsed = splitTitleAndDate(pick(row, COLS.name));\n  if (!parsed.title) continue;\n  const date = formatDate(pick(row, COLS.date) || parsed.period);\n  const type = pick(row, COLS.type);\n  out.push({ json: {\n    id: row.id || '',\n    name: parsed.title,\n    address: pick(row, COLS.address),\n    metro: pick(row, COLS.metro),\n    budget: pick(row, COLS.budget),\n    category: toCategory(type, parsed.title),\n    best_for: type,\n    description: pick(row, COLS.description),\n    photo_url: pick(row, COLS.photo_url),\n    photo_credit: pick(row, COLS.photo_credit),\n    map_url: pick(row, COLS.map_url),\n    opening_hours: pick(row, COLS.hours),\n    inrun_date_line: date ? '📅 Даты: ' + date : '',\n  } });\n}\nreturn out.length ? out : [{ json: {} }];\n"
+      },
+      "name": "Prepare Places",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        400
+      ],
+      "id": "a5de064d-c9dc-4472-86eb-8dcb119c6dff"
+    },
+    {
+      "parameters": {
+        "url": "=https://httpbin.org/image/jpeg",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "InRRunBot/1.0 (image-fetch-test)"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2096,
+        544
+      ],
+      "id": "a073524c-83cf-4fc8-8db5-444be6f7ba18",
+      "name": "HTTP Request",
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Users": {
+      "main": [
+        [
+          {
+            "node": "Get Places",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Places": {
+      "main": [
+        [
+          {
+            "node": "Prepare Places",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Save?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save?": {
+      "main": [
+        [
+          {
+            "node": "Save User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save User": {
+      "main": [
+        [
+          {
+            "node": "Reply Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Type": {
+      "main": [
+        [
+          {
+            "node": "Send Plain",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Main Menu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Profile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Walks",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Back",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has Photo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Photo?": {
+      "main": [
+        [
+          {
+            "node": "Send Photo Card",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Text Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Places": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Photo Card": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Send Text Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Send Photo Card",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Text Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ca08de33-d93e-4d25-b2fe-84cbcc32e7b8",
+  "nodeGroups": [],
+  "tags": []
+}
