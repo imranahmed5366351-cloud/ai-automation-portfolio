@@ -21,7 +21,9 @@ Finding free activities and places to visit in Moscow can take time. This bot ai
 
 ## Workflow
 The automation is built using n8n nodes and connected into a single workflow.
+### Workflow Screenshot
 
+![Moscow Telegram Bot Workflow](../01-moscow-telegram-bot.png)
 ## What I Learned
 - Building Telegram bots with n8n
 - Workflow logic and automation
