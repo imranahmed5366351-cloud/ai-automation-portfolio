@@ -32,7 +32,7 @@ Creating content separately for multiple social media platforms takes time. This
 Personal automation project.
 ## Workflow Screenshot
 
-![AI Content Repurposing Workflow](content-publisher-workflow.png)
+![AI Content Repurposing Workflow](content-publisher-workflow.png.png)
 
 ## Workflow File
 
