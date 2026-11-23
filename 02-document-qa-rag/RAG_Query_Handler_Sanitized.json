@@ -1,0 +1,180 @@
+{
+  "name": "RAG Query Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "replace-with-your-own-webhook-path",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -480,
+        -48
+      ],
+      "id": "60cb60f8-ac32-4fdb-b9be-af94144bf288",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "mode": "load",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "YOUR_PINECONE_INDEX",
+          "mode": "list",
+          "cachedResultName": "YOUR_PINECONE_INDEX"
+        },
+        "prompt": "={{ $json.body.query }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        -256,
+        -48
+      ],
+      "id": "887d8140-e135-4a6b-b80f-5e7a285249b9",
+      "name": "Pinecone Vector Store"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -176,
+        160
+      ],
+      "id": "18cacef7-2cab-4d6f-93be-9af3c7a38174",
+      "name": "Embeddings OpenAI"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=তুমি \"AI Trading Assistant\" নামের একটি professional trading knowledge platform-এর প্রতিনিধি। ব্যবহারকারীর প্রশ্নের একটি স্পষ্ট, তথ্যবহুল এবং professional উত্তর তৈরি করো — যেটা সরাসরি ইমেইলে পাঠানো হবে।\n\nব্যবহারকারীর নাম: {{ $('Webhook').item.json.body.name }}\nব্যবহারকারীর প্রশ্ন: {{ $('Webhook').item.json.body.query }}\n\nKnowledge base থেকে প্রাসঙ্গিক তথ্য (যদি থাকে):\n{{ $json.document.pageContent }}\n\nনির্দেশনা:\n1. ইমেইলটি এভাবে শুরু করো: \"প্রিয় {{ $('Webhook').item.json.body.name }},\"\n2. প্রথমে ১ লাইনে বলো যে তার প্রশ্নের উত্তর দেওয়া হচ্ছে।\n3. যদি knowledge base-এর তথ্য প্রশ্নের সাথে প্রাসঙ্গিক হয়, সেটা ব্যবহার করে উত্তর দাও। প্রাসঙ্গিক না হলে, তোমার নিজের general trading knowledge দিয়ে উত্তর দাও।\n4. উত্তরটি স্পষ্ট প্যারাগ্রাফে লিখো (কোনো markdown formatting যেমন **, #, - ব্যবহার কোরো না, শুধু plain, readable বাংলা টেক্সট)।\n5. প্রয়োজনে ২-৩টি ছোট প্যারাগ্রাফে ভাগ করো, প্রতিটি ভিন্ন দিক নিয়ে।\n6. উত্তরের শেষে একটি নতুন লাইনে লিখো: \"উৎস: Knowledge Base\" অথবা \"উৎস: সাধারণ জ্ঞান\" — যেটা প্রযোজ্য।\n7. একদম শেষে এই ভদ্র সমাপ্তি বাক্য যোগ করো: \"আপনার আরও কোনো প্রশ্ন থাকলে, নির্দ্বিধায় আবার জিজ্ঞাসা করুন।\"\n8. সম্পূর্ণটা professional, বন্ধুত্বপূর্ণ এবং সংক্ষিপ্ত রাখো (২০০ শব্দের মধ্যে)।\n\nশুধু ইমেইলের মূল অংশ (body) লেখো, কোনো subject line বা extra explanation দিও না।"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        112,
+        -48
+      ],
+      "id": "7c447564-d1f3-4519-952d-c07ff0137057",
+      "name": "Message a model"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Webhook').item.json.body.email }}",
+        "subject": "={{ $('Webhook').item.json.body.name }} — আপনার Trading প্রশ্নের উত্তর | AI Trading Assistant",
+        "message": "={{ $json.output[0].content[0].text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        -48
+      ],
+      "id": "0d78f9f2-7374-44dd-a055-3fb1cfb62015",
+      "name": "Send a message"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"success\": true,\n  \"message\": \"তোমার প্রশ্নের উত্তর ইমেইলে পাঠানো হয়েছে\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        704,
+        -48
+      ],
+      "id": "dd3c90ed-c752-4878-8eea-3594f54d0b13",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Store": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}
