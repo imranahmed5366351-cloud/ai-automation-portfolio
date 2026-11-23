@@ -1,0 +1,170 @@
+{
+  "name": "AI Content Repurposing & Auto-Publishing System",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Content Idea generator",
+        "formDescription": "Generate Lorem Ipsum placeholder text for your print, graphic, and web layouts, and explore the origins, history, and meaning of the famous dummy-text ...\n",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "what are you thinking ?",
+              "placeholder": "enter your content idea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -400,
+        -16
+      ],
+      "name": "Content Idea generator"
+    },
+    {
+      "parameters": {
+        "text": "=You are a content strategist assistant. The user will describe a rough content idea in casual language. Extract structured information from it to help plan the content piece.\n\nAnalyze the input and extract:\n- The core topic or subject\n- The most suitable content type (blog post, video, social media post, infographic, newsletter, etc.)\n- The likely target audience\n- The tone that would suit this content (informative, casual, humorous, persuasive, inspirational, etc.)\n- 3-5 relevant keywords or hashtags\n- A one-line content angle or hook suggestion\ntopic : {{ $json['what are you thinking ?'] }}\nIf any of these aren't clearly stated in the input, infer the most reasonable value based on context — do not leave fields empty.\n\ncontent should be 150 to 300  word",
+        "attributes": {
+          "attributes": [
+            {
+              "name": "facebook caption",
+              "description": "caption for facbook post with proper hashtag"
+            },
+            {
+              "name": "pinterest caption",
+              "description": "caption for Instragram post with proper hashtag"
+            },
+            {
+              "name": "linkedin cation",
+              "description": "caption for linkedinpost with proper hashtag"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [
+        -176,
+        -16
+      ],
+      "name": "Information Extractor"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -256,
+        192
+      ],
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "uploadText",
+        "user": "YOUR_UPLOAD_POST_ACCOUNT",
+        "platform": [
+          "facebook"
+        ],
+        "title": "={{ $json.output['facebook caption'] }}",
+        "facebookPageId": "YOUR_FACEBOOK_PAGE_ID"
+      },
+      "type": "n8n-nodes-upload-post.uploadPost",
+      "typeVersion": 1,
+      "position": [
+        288,
+        -160
+      ],
+      "name": "Facebook",
+      "credentials": {
+        "uploadPostApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "uploadText",
+        "user": "YOUR_UPLOAD_POST_ACCOUNT",
+        "platform": [
+          "linkedin"
+        ],
+        "title": "={{ $json.output['linkedin cation'] }}",
+        "targetLinkedinPageId": "me"
+      },
+      "type": "n8n-nodes-upload-post.uploadPost",
+      "typeVersion": 1,
+      "position": [
+        304,
+        128
+      ],
+      "name": "Linkedin",
+      "credentials": {
+        "uploadPostApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_CREDENTIAL_NAME"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Content Idea generator": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Extractor": {
+      "main": [
+        [
+          {
+            "node": "Facebook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Linkedin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "nodeGroups": []
+}
