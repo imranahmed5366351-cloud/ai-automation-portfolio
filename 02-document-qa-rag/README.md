@@ -44,10 +44,10 @@ Personal learning project. The workflows demonstrate document ingestion, semanti
 ## Workflow Screenshots
 
 ### 1. Knowledge Base Ingestion
-![Knowledge Base Ingestion](rag-knowledge-base-ingestion.png)
+![Knowledge Base Ingestion](rag-knowledge-base-ingestion.png.png)
 
 ### 2. RAG Query Handler
-![RAG Query Handler](rag-query-handler.png)
+![RAG Query Handler](ag-query-handler.png.png)
 
 ## Workflow JSON Files
 
