@@ -23,7 +23,7 @@ I build practical automation projects using n8n, AI tools, APIs, chatbots, and R
 
 2. [Trading Knowledge Base RAG Assistant](02-document-qa-rag/)
 
-3. [AI Content Repurposing & Auto-Publishing System](04-ai-content-publisher/)
+3. [AI Content Repurposing & Auto-Publishing System](ai-content-publisher/)
 ## Currently Learning
 
 - Python
