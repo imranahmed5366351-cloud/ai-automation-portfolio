@@ -17,20 +17,9 @@ I build practical automation projects using n8n, AI tools, APIs, chatbots, and R
 
 ## Projects
 
-### 1. Moscow Free Activities Telegram Bot
-A Telegram bot built with n8n that helps users discover free activities in Moscow.
+1. [Moscow Free Activities Telegram Bot](01-moscow-telegram-bot/)
 
-### 2. Document Q&A System (RAG)
-A document question-answering workflow using n8n, Pinecone, and RAG.
-
-### 3. AI Trading Assistant
-An AI-powered assistant workflow using n8n, Pinecone, and RAG.
-
-### 4. AI Content Idea to Multi-Platform Publisher
-An automation workflow that transforms content ideas into platform-specific content drafts.
-
-### 5. AI Career Roadmap Generator
-An AI-powered workflow that generates career roadmaps based on user interests and goals.
+2. [Trading Knowledge Base RAG Assistant](02-document-qa-rag/)
 
 ## Currently Learning
 
