@@ -29,3 +29,15 @@ Trading-related information can be spread across different sources. This project
 
 ## Project Status
 Personal project.
+## Workflow Screenshots
+
+### 1. Knowledge Base Ingestion
+![Knowledge Base Ingestion](rag-knowledge-base-ingestion.png.png)
+
+### 2. RAG Query Handler
+![RAG Query Handler](ag-query-handler.png.png)
+
+## Workflow JSON Files
+
+- [Download Knowledge Base Ingestion Workflow](RAG_Knowledge_Base_Ingestion_Sanitized.json)
+- [Download RAG Query Handler Workflow](RAG_Query_Handler_Sanitized.json)
