@@ -41,3 +41,15 @@ Finding specific information in trading learning materials can be time-consuming
 
 ## Project Status
 Personal learning project. The workflows demonstrate document ingestion, semantic search, and AI-powered question answering.
+## Workflow Screenshots
+
+### 1. Knowledge Base Ingestion
+![Knowledge Base Ingestion](rag-knowledge-base-ingestion.png)
+
+### 2. RAG Query Handler
+![RAG Query Handler](rag-query-handler.png)
+
+## Workflow JSON Files
+
+- [Download Knowledge Base Ingestion Workflow](RAG_Knowledge_Base_Ingestion_Sanitized.json)
+- [Download RAG Query Handler Workflow](RAG_Query_Handler_Sanitized.json)
